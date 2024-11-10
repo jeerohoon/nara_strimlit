@@ -387,7 +387,6 @@ st.header("3. 사정률 예측 모델", divider=True)
 
 # 모델 학습에 사용할 완전한 데이터 확인
 complete_data = processed_data.dropna(subset=['기초금액', '추정가격', '투찰률', 'A값', '순공사원가', '1순위사정률'])
-st.caption(f"학습에 사용 가능한 완전한 데이터: {len(complete_data):,}개")
 
 # 머신러닝 학습 버튼
 if st.button("🤖 머신러닝 모델 학습 시작", type="primary"):
