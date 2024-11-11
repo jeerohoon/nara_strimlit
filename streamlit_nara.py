@@ -297,57 +297,75 @@ st.caption(f"전체 {len(processed_data):,}개의 데이터가 포함되어 있�
 st.header("2. 기초금액 구간별 1순위사정률 분포", divider=True)
 
 # 유효한 데이터만 필터링
-valid_data = processed_data.dropna(subset=['기초금액', '1순위사정률'])
+valid_data = processed_data.dropna(subset=['기초금액', '1순위사정률']).copy()
 
 if len(valid_data) > 0:
     try:
-        # 기초금액 구간 생성 (100분위)
-        bins = min(100, len(valid_data))  # 데이터 수보다 많은 구간을 만들지 않도록
-        valid_data['기초금액_구간'] = pd.qcut(valid_data['기초금액'], q=bins, duplicates='drop')
+        # 데이터 전처리 전 상태 출력
+        st.text(f"전처리 전 데이터 수: {len(valid_data):,}개")
         
-        # 구간별 평균 사정률과 건수 계산
-        a_value_rates = valid_data.groupby('기초금액_구간').agg({
-            '1순위사정률': 'mean',
-            '기초금액': ['mean', 'count']
-        }).reset_index()
+        # 이상치 제거 기준 완화 (97%~103% 범위)
+        valid_data = valid_data[
+            (valid_data['1순위사정률'] >= 97.0) & 
+            (valid_data['1순위사정률'] <= 103.0)
+        ]
         
-        # 컬럼명 정리
-        a_value_rates.columns = ['기초금액_구간', '평균사정률', '기초금액', '건수']
+        st.text(f"전처리 후 데이터 수: {len(valid_data):,}개")
         
-        # Seaborn 그래프 생성
-        fig, ax = plt.subplots(figsize=(15, 6))
-        sns.scatterplot(data=a_value_rates, 
-                       x='기초금액',
-                       y='평균사정률',
-                       size='건수',
-                       sizes=(20, 200),
-                       alpha=0.6)
-        
-        # 그래프 스타일링
-        plt.title('기초금액 기준 평균 1순위사정률 분포')
-        plt.xlabel('기초금액 (원)')
-        plt.ylabel('평균 1순위사정률 (%)')
-        
-        # x축 포맷 설정
-        ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: format(int(x), ',')))
-        
-        # Streamlit에 그래프 표시
-        st.pyplot(fig)
-        
-        # 통계 정보 표시
-        st.subheader('기초금액 구간별 통계')
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("평균 기초금액", f"{format(int(valid_data['기초금액'].mean()), ',')}")
-        with col2:
-            st.metric("최고 사정률", f"{a_value_rates['평균사정률'].max():.2f}%")
-        with col3:
-            st.metric("최저 사정률", f"{a_value_rates['평균사정률'].min():.2f}%")
+        if len(valid_data) > 0:
+            # 기초금액 구간 생성 (최소 10개 구간 보장)
+            bins = max(10, min(50, len(valid_data) // 20))
+            valid_data['기초금액_구간'] = pd.qcut(valid_data['기초금액'], q=bins, duplicates='drop')
+            
+            # 구간별 통계 계산
+            stats = valid_data.groupby('기초금액_구간').agg({
+                '1순위사정률': ['mean', 'min', 'max', 'count'],
+                '기초금액': 'mean'
+            }).reset_index()
+            
+            # 컬럼명 정리
+            stats.columns = ['기초금액_구간', '평균사정률', '최저사정률', '최고사정률', '건수', '기초금액']
+            
+            # 히스토그램 생성
+            fig, ax = plt.subplots(figsize=(15, 6))
+            
+            # 히스토그램 그리기
+            sns.histplot(data=valid_data, 
+                        x='1순위사정률',
+                        bins=50,  # 구간 수 조정
+                        kde=True)  # 밀도 곡선 추가
+            
+            # 그래프 스타일링
+            plt.title('1순위사정률 분포', pad=20)
+            plt.xlabel('1순위사정률 (%)', labelpad=10)
+            plt.ylabel('빈도수', labelpad=10)
+            
+            # 그리드 추가
+            plt.grid(True, alpha=0.3)
+            
+            # Streamlit에 그래프 표시
+            st.pyplot(fig)
+            
+            # 통계 정보 표시
+            st.subheader('1순위사정률 통계')
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("평균 기초금액", f"{format(int(valid_data['기초금액'].mean()), ',')}")
+            with col2:
+                st.metric("최고 사정률", f"{valid_data['1순위사정률'].max():.2f}%")
+            with col3:
+                st.metric("최저 사정률", f"{valid_data['1순위사정률'].min():.2f}%")
+                
+            # 데이터 수 표시
+            st.caption(f"분석에 사용된 데이터 수: {len(valid_data):,}개")
+            
+        else:
+            st.warning("유효한 범위(97%~103%) 내의 사정률 데이터가 없습니다.")
             
     except Exception as e:
         st.error(f"데이터 분석 중 오류가 발생했습니다: {str(e)}")
 else:
-    st.warning("분석할 수 있는 유효한 데이터(기초금액과 1순위사정률이 모두 있는 데이터)가 없습니다.")
+    st.warning("분석할 수 있는 유효한 데이터가 없습니다.")
 
 ########################################################
 
@@ -372,20 +390,17 @@ class BidPricePredictor:
         features = ['기초금액', '추정가격', '투찰률', 'A값', '순공사원가']
         target = '1순위사정률'
         
-        st.text("=== 데이터 전처리 과정 ===")
-        st.metric("전처리 전 데이터 수", f"{len(self.data):,}개")
+        # 데이터 전처리 전 상태 출력
+        st.text(f"전처리 전 데이터 수: {len(self.data):,}개")
         
-        # 타겟 변수를 0~1 범위로 변환
-        if self.data[target].mean() > 1:
-            self.data[target] = self.data[target] / 100
-        
-        # 이상치 제거 (90%~110% 범위를 벗어나는 값)
+        # 이상치 제거 기준 완화 (50%~150% 범위)
         clean_data = self.data[
-            (self.data[target] >= 90.0) & 
-            (self.data[target] <= 110.0)
-]
-        # st.metric("이상치 제거 후 데이터 수", f"{len(clean_data):,}개")
-
+            (self.data[target] >= 50.0) & 
+            (self.data[target] <= 150.0)
+        ]
+        
+        st.text(f"전처리 후 데이터 수: {len(clean_data):,}개")
+        
         if len(clean_data) == 0:
             st.error("전처리 후 남은 데이터가 없습니다.")
             raise ValueError("전처리 후 남은 데이터가 없습니다.")
@@ -396,68 +411,83 @@ class BidPricePredictor:
         # 특성 스케일링
         X_scaled = self.scaler.fit_transform(X)
         
-        return X_scaled, y
-    
+        return X_scaled, y, clean_data
+
     def train_model(self):
-        X_scaled, y = self.prepare_data()
-        
-        # 학습/테스트 데이터 분할
-        X_train, X_test, y_train, y_test = train_test_split(
-            X_scaled, y, test_size=0.2, random_state=42
-        )
-        
-        # 모델 학습
-        self.model = RandomForestRegressor(
-            n_estimators=100,
-            max_depth=10,
-            min_samples_split=5,
-            min_samples_leaf=2,
-            random_state=42
-        )
-        self.model.fit(X_train, y_train)
-        
-        # 성능 평가
-        train_score = self.model.score(X_train, y_train)
-        test_score = self.model.score(X_test, y_test)
-        cv_scores = cross_val_score(self.model, X_scaled, y, cv=5)
-        
-        # 특성 중요도
-        feature_importance = pd.DataFrame({
-            'feature': ['기초금액', '추정가격', '투찰률', 'A값', '순공사원가'],
-            'importance': self.model.feature_importances_
-        }).sort_values('importance', ascending=False)
-        
-        st.text("=== 모델 성능 평가 ===")
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("학습 데이터 R² 점수", f"{train_score:.4f}")
-        with col2:
-            st.metric("테스트 데이터 R² 점수", f"{test_score:.4f}")
-        with col3:
-            st.metric("교차 검증 R² 점수", f"{cv_scores.mean():.4f}")
-        
-        st.text("=== 특성 중요도 ===")
-        # 특성 중요도를 막대 차트로 표시
-        fig, ax = plt.subplots(figsize=(10, 4))
-        sns.barplot(data=feature_importance, x='importance', y='feature')
-        plt.title('특성 중요도')
-        st.pyplot(fig)
-        
-        return self.model
+        try:
+            X_scaled, y, clean_data = self.prepare_data()
+            
+            # 학습/테스트 데이터 분할
+            X_train, X_test, y_train, y_test = train_test_split(
+                X_scaled, y, test_size=0.2, random_state=42
+            )
+            
+            # 모델 학습
+            self.model = RandomForestRegressor(
+                n_estimators=100,
+                max_depth=10,
+                min_samples_split=5,
+                min_samples_leaf=2,
+                random_state=42
+            )
+            self.model.fit(X_train, y_train)
+            
+            # 성능 평가
+            train_score = self.model.score(X_train, y_train)
+            test_score = self.model.score(X_test, y_test)
+            
+            # 성능 지표 표시
+            st.text("\n=== 모델 성능 평가 ===")
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("학습 데이터 R² 점수", f"{train_score:.4f}")
+            with col2:
+                st.metric("테스트 데이터 R² 점수", f"{test_score:.4f}")
+            
+            # 특성 중요도 시각화
+            feature_importance = pd.DataFrame({
+                '특성': ['기초금액', '추정가격', '투찰률', 'A값', '순공사원가'],
+                '중요도': self.model.feature_importances_
+            })
+            feature_importance = feature_importance.sort_values('중요도', ascending=True)
+            
+            fig, ax = plt.subplots(figsize=(10, 5))
+            bars = ax.barh(feature_importance['특성'], feature_importance['중요도'])
+            
+            # 막대 끝에 값 표시
+            for bar in bars:
+                width = bar.get_width()
+                ax.text(width, bar.get_y() + bar.get_height()/2, 
+                       f'{width:.4f}', 
+                       ha='left', va='center', fontsize=10)
+            
+            plt.title('특성 중요도')
+            plt.xlabel('중요도')
+            st.pyplot(fig)
+            
+            return self.model, clean_data
+            
+        except Exception as e:
+            st.error(f"모델 학습 중 오류가 발생했습니다: {str(e)}")
+            return None, None
     
     def predict_rate(self, new_data):
         if self.model is None:
             st.error("모델이 학습되지 않았습니다. 먼저 train_model()을 실행하세요.")
-            raise ValueError("모델이 학습되지 않았습니다.")
+            return None
         
-        # 특성 스케일링 적용
-        scaled_data = self.scaler.transform(new_data)
-        
-        # 예측 수행
-        predicted = self.model.predict(scaled_data)[0]
-        
-        # 예측값을 퍼센트로 변환하여 반환
-        return predicted * 100
+        try:
+            # 특성 스케일링 적용
+            scaled_data = self.scaler.transform(new_data)
+            
+            # 예측 수행
+            predicted = self.model.predict(scaled_data)[0]
+            
+            return predicted
+            
+        except Exception as e:
+            st.error(f"예측 중 오류가 발생했습니다: {str(e)}")
+            return None
 
 ########################################################
 ########################################################
