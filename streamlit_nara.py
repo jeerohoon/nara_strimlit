@@ -57,9 +57,22 @@ def load_and_preprocess_data():
             st.error("읽을 수 있는 입찰정보 파일이 없습니다.")
             return pd.DataFrame()
         
-        # 입찰정보 병합
+        # 입찰정보 병합 및 중복 제거
         merged_bid = pd.concat(bid_dfs, axis=0, ignore_index=True)
+        
+        # 중복 제거 전 데이터 수 저장
+        before_drop_duplicates = len(merged_bid)
+        
+        # 공고번호 기준으로 중복 제거 (최신 데이터 유지)
+        merged_bid = merged_bid.sort_values('개찰일', ascending=False)  # 최신 데이터가 위로 오도록 정렬
         merged_bid = merged_bid.drop_duplicates(subset=['공고번호'], keep='first')
+        
+        # 중복 제거 후 데이터 수 계산
+        after_drop_duplicates = len(merged_bid)
+        removed_duplicates = before_drop_duplicates - after_drop_duplicates
+        
+        if removed_duplicates > 0:
+            st.info(f"중복된 공고번호 {removed_duplicates}개가 제거되었습니다. (전체: {before_drop_duplicates}개 → {after_drop_duplicates}개)")
         
         try:
             # 낙찰정보 파일 존재 여부 확인
@@ -79,7 +92,15 @@ def load_and_preprocess_data():
             
             if award_dfs:  # 낙찰정보가 있는 경우에만 병합
                 merged_award = pd.concat(award_dfs, axis=0, ignore_index=True)
+                
+                # 낙찰정보도 중복 제거 (최신 데이터 유지)
+                before_award_duplicates = len(merged_award)
                 merged_award = merged_award.drop_duplicates(subset=['공고번호'], keep='first')
+                after_award_duplicates = len(merged_award)
+                removed_award_duplicates = before_award_duplicates - after_award_duplicates
+                
+                if removed_award_duplicates > 0:
+                    st.info(f"낙찰정보에서 중복된 공고번호 {removed_award_duplicates}개가 제거되었습니다.")
                 
                 # 입찰정보와 낙찰정보 병합
                 columns_to_use = [col for col in merged_award.columns if col not in merged_bid.columns or col == '공고번호']
@@ -101,10 +122,13 @@ def load_and_preprocess_data():
         numeric_columns = ['기초금액', '추정가격', '투찰률', 'A값', '순공사원가', '1순위사정률']
         
         # 숫자형 변환
+        # 숫자형으로 변환할 열 목록
+        numeric_columns = ['기초금액', '추정가격', '투찰률', 'A값', '순공사원가', '1순위사정률']
+
+        # 숫자형 변환
         for col in numeric_columns:
             if col in merged_data.columns:
                 merged_data[col] = merged_data[col].apply(convert_to_numeric)
-                st.info(f"{col} 변환 후 유효한 데이터 수: {merged_data[col].notna().sum()}")
         
         # '번호' 열 삭제
         if '번호' in merged_data.columns:
