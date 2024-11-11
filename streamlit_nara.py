@@ -10,35 +10,37 @@ from sklearn.metrics import mean_squared_error, r2_score
 import os
 import matplotlib.font_manager as fm
 import requests
+import platform
 
 ########################################################
 # 한글 폰트 설정
 plt.rc('font', family='NanumGothic')  # 나눔고딕 폰트 사용
 plt.rcParams['axes.unicode_minus'] = False  # 마이너스 기호 깨짐 방지
 
-# 나눔고딕 폰트 다운로드 및 설치
-def setup_korean_font():
-    font_dir = os.path.join(os.path.dirname(__file__), 'fonts')
-    font_path = os.path.join(font_dir, 'NanumGothic.ttf')
+# 시스템별 기본 한글 폰트 설정
+def set_matplotlib_korean_font():
+    system_name = platform.system()
     
-    # 폰트 디렉토리가 없으면 생성
-    if not os.path.exists(font_dir):
-        os.makedirs(font_dir)
+    if system_name == "Darwin":  # macOS
+        plt.rc('font', family='AppleGothic')
+    elif system_name == "Windows":
+        plt.rc('font', family='Malgun Gothic')
+    else:  # Linux
+        try:
+            # 나눔고딕이 설치되어 있는 경우
+            plt.rc('font', family='NanumGothic')
+        except:
+            # 기본 sans-serif 폰트 사용
+            plt.rc('font', family='sans-serif')
+            plt.rcParams['font.sans-serif'] = ['NanumGothic', 
+                                             'Malgun Gothic', 
+                                             'AppleGothic', 
+                                             'DejaVu Sans']
     
-    # 폰트 파일이 없으면 다운로드
-    if not os.path.exists(font_path):
-        font_url = "https://raw.githubusercontent.com/googlefonts/nanum-gothic/main/fonts/NanumGothic-Regular.ttf"
-        response = requests.get(font_url)
-        with open(font_path, 'wb') as f:
-            f.write(response.content)
-    
-    # 폰트 추가
-    fm.fontManager.addfont(font_path)
-    plt.rc('font', family='NanumGothic')
     plt.rcParams['axes.unicode_minus'] = False
 
 # 한글 폰트 설정 실행
-setup_korean_font()
+set_matplotlib_korean_font()
 
 ########################################################
 
