@@ -8,11 +8,12 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_squared_error, r2_score
 import os
+import matplotlib.font_manager as fm
 
 
 ########################################################
 # 한글 폰트 설정
-plt.rcParams['font.family'] = 'AppleGothic'  # macOS의 경우
+plt.rc('font', family='NanumGothic')  # 나눔고딕 폰트 사용
 plt.rcParams['axes.unicode_minus'] = False  # 마이너스 기호 깨짐 방지
 
 ########################################################
