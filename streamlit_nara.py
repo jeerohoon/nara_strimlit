@@ -31,14 +31,21 @@ def convert_to_numeric(x):
 
 def load_and_preprocess_data():
     try:
-        # 데이터 폴더 경로 설정 (현재 디렉토리로 설정)
+        # 데이터 폴더 경로 설정
         data_folder = os.path.dirname(os.path.abspath(__file__))
+        st.write("현재 작업 디렉토리:", data_folder)
         
-        # 입찰정보 파일 존재 여부 확인 (영문 파일명 사용)
+        # 입찰정보 파일 존재 여부 확인
         bid_files = [os.path.join(data_folder, f'bid_info_{i}.xlsx') for i in range(1, 6)]
+        st.write("검색할 입찰정보 파일:", bid_files)
+        
         existing_bid_files = [f for f in bid_files if os.path.exists(f)]
+        st.write("존재하는 입찰정보 파일:", existing_bid_files)
         
         if not existing_bid_files:
+            # 현재 디렉토리의 모든 파일 목록 출력
+            all_files = os.listdir(data_folder)
+            st.write("현재 디렉토리의 모든 파일:", all_files)
             st.error("입찰정보 파일을 찾을 수 없습니다.")
             return pd.DataFrame()
         
@@ -46,8 +53,10 @@ def load_and_preprocess_data():
         bid_dfs = []
         for file in existing_bid_files:
             try:
+                st.write(f"파일 읽기 시도: {file}")
                 df = pd.read_excel(file, header=1)
                 if not df.empty:
+                    st.write(f"파일 '{file}' 읽기 성공 (행 수: {len(df)})")
                     bid_dfs.append(df)
             except Exception as e:
                 st.warning(f"파일 '{file}' 읽기 실패: {str(e)}")
