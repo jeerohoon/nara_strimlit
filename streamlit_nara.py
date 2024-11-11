@@ -12,9 +12,9 @@ import os
 
 ########################################################
 # 한글 폰트 설정
-plt.rcParams['font.family'] = 'AppleGothic'  # Mac OS용
-# plt.rcParams['font.family'] = 'Malgun Gothic'  # Windows용
+plt.rcParams['font.family'] = 'AppleGothic'  # macOS의 경우
 plt.rcParams['axes.unicode_minus'] = False  # 마이너스 기호 깨짐 방지
+
 ########################################################
 
 # 두 번째 셀 - 데이터 로드 및 전처리
@@ -304,10 +304,10 @@ if len(valid_data) > 0:
         # 데이터 전처리 전 상태 출력
         st.text(f"전처리 전 데이터 수: {len(valid_data):,}개")
         
-        # 이상치 제거 기준 완화 (97%~103% 범위)
+        # 이상치 제거 기준 완화 (96%~104% 범위)
         valid_data = valid_data[
-            (valid_data['1순위사정률'] >= 97.0) & 
-            (valid_data['1순위사정률'] <= 103.0)
+            (valid_data['1순위사정률'] >= 96.0) & 
+            (valid_data['1순위사정률'] <= 104.0)
         ]
         
         st.text(f"전처리 후 데이터 수: {len(valid_data):,}개")
@@ -360,7 +360,7 @@ if len(valid_data) > 0:
             st.caption(f"분석에 사용된 데이터 수: {len(valid_data):,}개")
             
         else:
-            st.warning("유효한 범위(97%~103%) 내의 사정률 데이터가 없습니다.")
+            st.warning("유효한 범위(96%~104%) 내의 사정률 데이터가 없습니다.")
             
     except Exception as e:
         st.error(f"데이터 분석 중 오류가 발생했습니다: {str(e)}")
@@ -374,7 +374,7 @@ else:
 class BidPricePredictor:
     def __init__(self, data):
         # 결측치가 없는 데이터만 선택
-        required_columns = ['기초금액', '추정가격', '투찰률', 'A값', '순공사원가', '1순위사정률']
+        required_columns = ['기초금액', '추정가격', '투찰률', 'A값', '순공사원가',  '1순위사정률']
         self.data = data.dropna(subset=required_columns).copy()
         self.model = None
         self.scaler = StandardScaler()
