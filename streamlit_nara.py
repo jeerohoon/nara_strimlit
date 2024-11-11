@@ -30,52 +30,89 @@ def convert_to_numeric(x):
     return pd.to_numeric(x, errors='coerce')
 
 def load_and_preprocess_data():
-    # 데이터 폴더 경로 설정
-    data_folder = ''
-    
-    # 입찰정보 1~5 파일 읽기
-    bid_files = [os.path.join(data_folder, f'입찰정보_{i}.xlsx') for i in range(1, 6)]
-    bid_dfs = [pd.read_excel(file, header=1) for file in bid_files]
-    
-    # 입찰정보 병합
-    merged_bid = pd.concat(bid_dfs, axis=0, ignore_index=True)
-    merged_bid = merged_bid.drop_duplicates(subset=['공고번호'], keep='first')
-    
-    # 낙찰정보 1~5 파일 읽기
-    award_files = [os.path.join(data_folder, f'낙찰정보_{i}.xlsx') for i in range(1, 6)]
-    award_dfs = [pd.read_excel(file, header=1) for file in award_files]
-    
-    # 낙찰정보 병합
-    merged_award = pd.concat(award_dfs, axis=0, ignore_index=True)
-    merged_award = merged_award.drop_duplicates(subset=['공고번호'], keep='first')
-    
-    # 입찰정보와 낙찰정보 병합
-    columns_to_use = [col for col in merged_award.columns if col not in merged_bid.columns or col == '공고번호']
-    merged_data = pd.merge(
-        merged_bid,
-        merged_award[columns_to_use],
-        on='공고번호',
-        how='left'
-    )
-    
-    # 숫자형으로 변환할 열 목록
-    numeric_columns = ['기초금액', '추정가격', '투찰률', 'A값', '순공사원가', '1순위사정률']
-    
-    # 숫자형 변환
-    for col in numeric_columns:
-        if col in merged_data.columns:
-            merged_data[col] = merged_data[col].apply(convert_to_numeric)
-            print(f"{col} 변환 후 유효한 데이터 수: {merged_data[col].notna().sum()}")
-    
-    # 필수 열의 결측치가 있는 행 삭제
-    required_columns = ['기초금액', '추정가격', '투찰률', 'A값', '순공사원가']
-    merged_data = merged_data.dropna(subset=required_columns + ['1순위사정률'])
-    
-    # '번호' 열 삭제
-    if '번호' in merged_data.columns:
-        merged_data = merged_data.drop('번호', axis=1)
-    
-    return merged_data
+    try:
+        # 데이터 폴더 경로 설정
+        data_folder = ''
+        
+        # 입찰정보 파일 존재 여부 확인
+        bid_files = [os.path.join(data_folder, f'입찰정보_{i}.xlsx') for i in range(1, 6)]
+        existing_bid_files = [f for f in bid_files if os.path.exists(f)]
+        
+        if not existing_bid_files:
+            st.error("입찰정보 파일을 찾을 수 없습니다.")
+            return pd.DataFrame()
+            
+        # 입찰정보 파일 읽기
+        bid_dfs = []
+        for file in existing_bid_files:
+            try:
+                df = pd.read_excel(file, header=1)
+                bid_dfs.append(df)
+            except Exception as e:
+                st.warning(f"파일 '{file}' 읽기 실패: {str(e)}")
+                continue
+        
+        if not bid_dfs:
+            st.error("읽을 수 있는 입찰정보 파일이 없습니다.")
+            return pd.DataFrame()
+            
+        # 입찰정보 병합
+        merged_bid = pd.concat(bid_dfs, axis=0, ignore_index=True)
+        merged_bid = merged_bid.drop_duplicates(subset=['공고번호'], keep='first')
+        
+        # 낙찰정보 파일 존재 여부 확인
+        award_files = [os.path.join(data_folder, f'낙찰정보_{i}.xlsx') for i in range(1, 6)]
+        existing_award_files = [f for f in award_files if os.path.exists(f)]
+        
+        if not existing_award_files:
+            st.warning("낙찰정보 파일을 찾을 수 없습니다. 입찰정보만 처리합니다.")
+            return merged_bid
+            
+        # 낙찰정보 파일 읽기
+        award_dfs = []
+        for file in existing_award_files:
+            try:
+                df = pd.read_excel(file, header=1)
+                award_dfs.append(df)
+            except Exception as e:
+                st.warning(f"파일 '{file}' 읽기 실패: {str(e)}")
+                continue
+        
+        if not award_dfs:
+            st.warning("읽을 수 있는 낙찰정보 파일이 없습니다. 입찰정보만 처리합니다.")
+            return merged_bid
+            
+        # 낙찰정보 병합
+        merged_award = pd.concat(award_dfs, axis=0, ignore_index=True)
+        merged_award = merged_award.drop_duplicates(subset=['공고번호'], keep='first')
+        
+        # 입찰정보와 낙찰정보 병합
+        columns_to_use = [col for col in merged_award.columns if col not in merged_bid.columns or col == '공고번호']
+        merged_data = pd.merge(
+            merged_bid,
+            merged_award[columns_to_use],
+            on='공고번호',
+            how='left'
+        )
+        
+        # 숫자형으로 변환할 열 목록
+        numeric_columns = ['기초금액', '추정가격', '투찰률', 'A값', '순공사원가', '1순위사정률']
+        
+        # 숫자형 변환
+        for col in numeric_columns:
+            if col in merged_data.columns:
+                merged_data[col] = merged_data[col].apply(convert_to_numeric)
+                st.info(f"{col} 변환 후 유효한 데이터 수: {merged_data[col].notna().sum()}")
+        
+        # '번호' 열 삭제
+        if '번호' in merged_data.columns:
+            merged_data = merged_data.drop('번호', axis=1)
+        
+        return merged_data
+        
+    except Exception as e:
+        st.error(f"데이터 처리 중 오류가 발생했습니다: {str(e)}")
+        return pd.DataFrame()
 
 # 데이터 로드 및 전처리 실행
 processed_data = load_and_preprocess_data()
