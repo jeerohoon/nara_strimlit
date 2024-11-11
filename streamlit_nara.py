@@ -10,37 +10,11 @@ from sklearn.metrics import mean_squared_error, r2_score
 import os
 import matplotlib.font_manager as fm
 import requests
-import platform
 
 ########################################################
 # 한글 폰트 설정
 plt.rc('font', family='NanumGothic')  # 나눔고딕 폰트 사용
 plt.rcParams['axes.unicode_minus'] = False  # 마이너스 기호 깨짐 방지
-
-# 시스템별 기본 한글 폰트 설정
-def set_matplotlib_korean_font():
-    system_name = platform.system()
-    
-    if system_name == "Darwin":  # macOS
-        plt.rc('font', family='AppleGothic')
-    elif system_name == "Windows":
-        plt.rc('font', family='Malgun Gothic')
-    else:  # Linux
-        try:
-            # 나눔고딕이 설치되어 있는 경우
-            plt.rc('font', family='NanumGothic')
-        except:
-            # 기본 sans-serif 폰트 사용
-            plt.rc('font', family='sans-serif')
-            plt.rcParams['font.sans-serif'] = ['NanumGothic', 
-                                             'Malgun Gothic', 
-                                             'AppleGothic', 
-                                             'DejaVu Sans']
-    
-    plt.rcParams['axes.unicode_minus'] = False
-
-# 한글 폰트 설정 실행
-set_matplotlib_korean_font()
 
 ########################################################
 
