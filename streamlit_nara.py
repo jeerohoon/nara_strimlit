@@ -297,42 +297,58 @@ st.caption(f"전체 {len(processed_data):,}개의 데이터가 포함되어 있�
 ########################################################
 st.header("2. 기초금액 구간별 1순위사정률 분포", divider=True)
 
-# 기초금액 구간별 평균 사정률 계산
-a_value_rates = processed_data.groupby(pd.qcut(processed_data['기초금액'], q=100))['1순위사정률'].agg(['mean', 'count']).reset_index()
-a_value_rates.columns = ['기초금액_구간', '평균사정률', '건수']
+# 유효한 데이터만 필터링
+valid_data = processed_data.dropna(subset=['기초금액', '1순위사정률'])
 
-# 기초금액 구간의 대표값 추출
-a_value_rates['기초금액'] = a_value_rates['기초금액_구간'].apply(lambda x: x.mid)
-
-# Seaborn 그래프 생성
-fig, ax = plt.subplots(figsize=(15, 6))
-sns.scatterplot(data=a_value_rates, 
-                x='기초금액',
-                y='평균사정률',
-                size='건수',
-                sizes=(20, 200),
-                alpha=0.6)
-
-# 그래프 스타일링
-plt.title('기초금액 기준 평균 1순위사정률 분포')
-plt.xlabel('기초금액 (원)')
-plt.ylabel('평균 1순위사정률 (%)')
-
-# x축 포맷 설정 (원 단위로 표시, 천 단위 구분 기호 추가)
-ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: format(int(x), ',')))
-
-# Streamlit에 그래프 표시
-st.pyplot(fig)
-
-# 통계 정보 표시
-st.subheader('기초금액 구간별 통계')
-col1, col2, col3 = st.columns(3)
-with col1:
-    st.metric("평균 기초금액", f"{format(int(processed_data['기초금액'].mean()), ',')}")
-with col2:
-    st.metric("최고 사정률", f"{a_value_rates['평균사정률'].max():.2f}%")
-with col3:
-    st.metric("최저 사정률", f"{a_value_rates['평균사정률'].min():.2f}%")
+if len(valid_data) > 0:
+    try:
+        # 기초금액 구간 생성 (100분위)
+        bins = min(100, len(valid_data))  # 데이터 수보다 많은 구간을 만들지 않도록
+        valid_data['기초금액_구간'] = pd.qcut(valid_data['기초금액'], q=bins, duplicates='drop')
+        
+        # 구간별 평균 사정률과 건수 계산
+        a_value_rates = valid_data.groupby('기초금액_구간').agg({
+            '1순위사정률': 'mean',
+            '기초금액': ['mean', 'count']
+        }).reset_index()
+        
+        # 컬럼명 정리
+        a_value_rates.columns = ['기초금액_구간', '평균사정률', '기초금액', '건수']
+        
+        # Seaborn 그래프 생성
+        fig, ax = plt.subplots(figsize=(15, 6))
+        sns.scatterplot(data=a_value_rates, 
+                       x='기초금액',
+                       y='평균사정률',
+                       size='건수',
+                       sizes=(20, 200),
+                       alpha=0.6)
+        
+        # 그래프 스타일링
+        plt.title('기초금액 기준 평균 1순위사정률 분포')
+        plt.xlabel('기초금액 (원)')
+        plt.ylabel('평균 1순위사정률 (%)')
+        
+        # x축 포맷 설정
+        ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: format(int(x), ',')))
+        
+        # Streamlit에 그래프 표시
+        st.pyplot(fig)
+        
+        # 통계 정보 표시
+        st.subheader('기초금액 구간별 통계')
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("평균 기초금액", f"{format(int(valid_data['기초금액'].mean()), ',')}")
+        with col2:
+            st.metric("최고 사정률", f"{a_value_rates['평균사정률'].max():.2f}%")
+        with col3:
+            st.metric("최저 사정률", f"{a_value_rates['평균사정률'].min():.2f}%")
+            
+    except Exception as e:
+        st.error(f"데이터 분석 중 오류가 발생했습니다: {str(e)}")
+else:
+    st.warning("분석할 수 있는 유효한 데이터(기초금액과 1순위사정률이 모두 있는 데이터)가 없습니다.")
 
 ########################################################
 
