@@ -31,8 +31,8 @@ def convert_to_numeric(x):
 
 def load_and_preprocess_data():
     try:
-        # 데이터 폴더 경로 설정
-        data_folder = ''
+        # 데이터 폴더 경로 설정 (현재 디렉토리로 설정)
+        data_folder = os.path.dirname(os.path.abspath(__file__))
         
         # 입찰정보 파일 존재 여부 확인
         bid_files = [os.path.join(data_folder, f'입찰정보_{i}.xlsx') for i in range(1, 6)]
@@ -41,13 +41,14 @@ def load_and_preprocess_data():
         if not existing_bid_files:
             st.error("입찰정보 파일을 찾을 수 없습니다.")
             return pd.DataFrame()
-            
+        
         # 입찰정보 파일 읽기
         bid_dfs = []
         for file in existing_bid_files:
             try:
                 df = pd.read_excel(file, header=1)
-                bid_dfs.append(df)
+                if not df.empty:
+                    bid_dfs.append(df)
             except Exception as e:
                 st.warning(f"파일 '{file}' 읽기 실패: {str(e)}")
                 continue
@@ -55,45 +56,46 @@ def load_and_preprocess_data():
         if not bid_dfs:
             st.error("읽을 수 있는 입찰정보 파일이 없습니다.")
             return pd.DataFrame()
-            
+        
         # 입찰정보 병합
         merged_bid = pd.concat(bid_dfs, axis=0, ignore_index=True)
         merged_bid = merged_bid.drop_duplicates(subset=['공고번호'], keep='first')
         
-        # 낙찰정보 파일 존재 여부 확인
-        award_files = [os.path.join(data_folder, f'낙찰정보_{i}.xlsx') for i in range(1, 6)]
-        existing_award_files = [f for f in award_files if os.path.exists(f)]
-        
-        if not existing_award_files:
-            st.warning("낙찰정보 파일을 찾을 수 없습니다. 입찰정보만 처리합니다.")
-            return merged_bid
+        try:
+            # 낙찰정보 파일 존재 여부 확인
+            award_files = [os.path.join(data_folder, f'낙찰정보_{i}.xlsx') for i in range(1, 6)]
+            existing_award_files = [f for f in award_files if os.path.exists(f)]
             
-        # 낙찰정보 파일 읽기
-        award_dfs = []
-        for file in existing_award_files:
-            try:
-                df = pd.read_excel(file, header=1)
-                award_dfs.append(df)
-            except Exception as e:
-                st.warning(f"파일 '{file}' 읽기 실패: {str(e)}")
-                continue
-        
-        if not award_dfs:
-            st.warning("읽을 수 있는 낙찰정보 파일이 없습니다. 입찰정보만 처리합니다.")
-            return merged_bid
+            award_dfs = []
+            if existing_award_files:  # 낙찰정보 파일이 있는 경우에만 처리
+                for file in existing_award_files:
+                    try:
+                        df = pd.read_excel(file, header=1)
+                        if not df.empty:
+                            award_dfs.append(df)
+                    except Exception as e:
+                        st.warning(f"낙찰정보 파일 '{file}' 읽기 실패: {str(e)}")
+                        continue
             
-        # 낙찰정보 병합
-        merged_award = pd.concat(award_dfs, axis=0, ignore_index=True)
-        merged_award = merged_award.drop_duplicates(subset=['공고번호'], keep='first')
+            if award_dfs:  # 낙찰정보가 있는 경우에만 병합
+                merged_award = pd.concat(award_dfs, axis=0, ignore_index=True)
+                merged_award = merged_award.drop_duplicates(subset=['공고번호'], keep='first')
+                
+                # 입찰정보와 낙찰정보 병합
+                columns_to_use = [col for col in merged_award.columns if col not in merged_bid.columns or col == '공고번호']
+                merged_data = pd.merge(
+                    merged_bid,
+                    merged_award[columns_to_use],
+                    on='공고번호',
+                    how='left'
+                )
+            else:
+                merged_data = merged_bid
+                st.info("낙찰정보 파일이 없거나 읽을 수 없어 입찰정보만 처리합니다.")
         
-        # 입찰정보와 낙찰정보 병합
-        columns_to_use = [col for col in merged_award.columns if col not in merged_bid.columns or col == '공고번호']
-        merged_data = pd.merge(
-            merged_bid,
-            merged_award[columns_to_use],
-            on='공고번호',
-            how='left'
-        )
+        except Exception as e:
+            st.warning(f"낙찰정보 처리 중 오류 발생: {str(e)}")
+            merged_data = merged_bid
         
         # 숫자형으로 변환할 열 목록
         numeric_columns = ['기초금액', '추정가격', '투찰률', 'A값', '순공사원가', '1순위사정률']
