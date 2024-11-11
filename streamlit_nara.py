@@ -379,13 +379,15 @@ class BidPricePredictor:
         if self.data[target].mean() > 1:
             self.data[target] = self.data[target] / 100
         
-        # # 이상치 제거 (0.9~1.1 범위를 벗어나는 값)
+        # 이상치 제거 (0.9~1.1 범위를 벗어나는 값)
         # clean_data = self.data[
         #     (self.data[target] > 0.9) & 
         #     (self.data[target] < 1.1)
         # ]
         # st.metric("이상치 제거 후 데이터 수", f"{len(clean_data):,}개")
         
+        clean_data = self.data
+
         if len(clean_data) == 0:
             st.error("전처리 후 남은 데이터가 없습니다.")
             raise ValueError("전처리 후 남은 데이터가 없습니다.")
