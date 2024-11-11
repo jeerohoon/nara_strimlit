@@ -34,8 +34,8 @@ def load_and_preprocess_data():
         # 데이터 폴더 경로 설정 (현재 디렉토리로 설정)
         data_folder = os.path.dirname(os.path.abspath(__file__))
         
-        # 입찰정보 파일 존재 여부 확인
-        bid_files = [os.path.join(data_folder, f'입찰정보_{i}.xlsx') for i in range(1, 6)]
+        # 입찰정보 파일 존재 여부 확인 (영문 파일명 사용)
+        bid_files = [os.path.join(data_folder, f'bid_info_{i}.xlsx') for i in range(1, 6)]
         existing_bid_files = [f for f in bid_files if os.path.exists(f)]
         
         if not existing_bid_files:
@@ -75,8 +75,8 @@ def load_and_preprocess_data():
             st.info(f"중복된 공고번호 {removed_duplicates}개가 제거되었습니다. (전체: {before_drop_duplicates}개 → {after_drop_duplicates}개)")
         
         try:
-            # 낙찰정보 파일 존재 여부 확인
-            award_files = [os.path.join(data_folder, f'낙찰정보_{i}.xlsx') for i in range(1, 6)]
+            # 낙찰정보 파일 존재 여부 확인 (영문 파일명 사용)
+            award_files = [os.path.join(data_folder, f'award_info_{i}.xlsx') for i in range(1, 6)]
             existing_award_files = [f for f in award_files if os.path.exists(f)]
             
             award_dfs = []
