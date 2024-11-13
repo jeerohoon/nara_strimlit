@@ -124,7 +124,7 @@ class BidPricePredictor:
             )
             self.model.fit(self.X_train, self.y_train)
             
-            # 특성 중요도 시각화
+            # 특성 중요도 계산 및 표시
             st.subheader("특성 중요도")
             feature_names = numeric_features + list(X_categorical.columns)
             feature_importance_df = pd.DataFrame({
@@ -132,9 +132,42 @@ class BidPricePredictor:
                 '중요도': self.model.feature_importances_
             })
             
-            fig = plot_feature_importance(self.model, feature_importance_df)
-            if fig is not None:
-                st.pyplot(fig)
+            # 중요도 기준으로 내림차순 정렬
+            feature_importance_df = feature_importance_df.sort_values('중요도', ascending=False)
+            
+            # 백분율로 변환
+            total_importance = feature_importance_df['중요도'].sum()
+            feature_importance_df['중요도(%)'] = (feature_importance_df['중요도'] / total_importance * 100)
+            
+            # 누적 중요도 계산
+            feature_importance_df['누적 중요도(%)'] = feature_importance_df['중요도(%)'].cumsum()
+            
+            # 표 형식으로 표시
+            st.dataframe(
+                feature_importance_df.style.format({
+                    '특성': '{}',
+                    '중요도': '{:.4f}',
+                    '중요도(%)': '{:.2f}%',
+                    '누적 중요도(%)': '{:.2f}%'
+                }).background_gradient(subset=['중요도'], cmap='Blues'),
+                use_container_width=True
+            )
+            
+            # 중요도 요약 통계
+            st.text("\n=== 특성 중요도 요약 ===")
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("가장 중요한 특성", 
+                         feature_importance_df.iloc[0]['특성'],
+                         f"{feature_importance_df.iloc[0]['중요도(%)']:.2f}%")
+            with col2:
+                top_3_importance = feature_importance_df.iloc[:3]['중요도(%)'].sum()
+                st.metric("상위 3개 특성 중요도 합", 
+                         f"{top_3_importance:.2f}%")
+            with col3:
+                features_80pct = len(feature_importance_df[feature_importance_df['누적 중요도(%)'] <= 80])
+                st.metric("중요도 80% 달성에 필요한 특성 수", 
+                         f"{features_80pct}개")
             
             return self.model, self.data
             
