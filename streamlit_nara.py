@@ -330,16 +330,30 @@ def show_category_statistics(data, exclude_lower=99.5, exclude_upper=100.5):
 
 # 한글 폰트 설정
 def setup_korean_font():
+    """한글 폰트 설정 함수"""
     system_name = platform.system()
     
-    if system_name == "Windows":
-        plt.rcParams['font.family'] = 'Malgun Gothic'
-    elif system_name == "Darwin":  # macOS
-        plt.rcParams['font.family'] = 'AppleGothic'
-    else:  # Linux
-        plt.rcParams['font.family'] = 'NanumGothic'
-    
-    plt.rcParams['axes.unicode_minus'] = False
+    try:
+        if system_name == "Windows":
+            plt.rcParams['font.family'] = 'Malgun Gothic'
+        elif system_name == "Darwin":  # macOS
+            plt.rcParams['font.family'] = 'AppleGothic'
+        else:  # Linux
+            # 나눔고딕 폰트가 없는 경우 설치
+            import subprocess
+            try:
+                subprocess.run(['fc-list', ':lang=ko'], check=True)
+            except:
+                subprocess.run(['apt-get', 'install', '-y', 'fonts-nanum'], check=True)
+            plt.rcParams['font.family'] = 'NanumGothic'
+        
+        plt.rcParams['axes.unicode_minus'] = False
+        
+    except Exception as e:
+        st.warning(f"한글 폰트 설정 중 오류 발생: {str(e)}")
+        # 기본 폰트 사용
+        plt.rcParams['font.family'] = 'DejaVu Sans'
+        plt.rcParams['axes.unicode_minus'] = False
 
 # 특성 중요도 시각화
 def plot_feature_importance(model, feature_importance_df):
@@ -857,8 +871,9 @@ category_stats = show_category_statistics(processed_data, exclude_lower, exclude
 def plot_category_distribution(data, category=None):
     """발주처 카테고리별 확률분포와 실제 분포를 비교하는 그래프"""
     try:
-        # 한글 폰트 설정
+        # 그래프 생성 전 한글 폰트 설정
         setup_korean_font()
+        plt.clf()  # 이전 그래프 초기화
         
         # 데이터 필터링
         if category == '전체':
@@ -887,6 +902,12 @@ def plot_category_distribution(data, category=None):
         # 그래프 생성
         fig, ax = plt.subplots(figsize=(15, 8))
         
+        # 폰트 크기 조정
+        plt.rcParams['font.size'] = 12
+        plt.rcParams['axes.titlesize'] = 14
+        plt.rcParams['axes.labelsize'] = 12
+        plt.rcParams['legend.fontsize'] = 10
+        
         # 실제 분포 그래프
         ax.plot(intervals, actual_counts, color='steelblue', 
                label='실제 확률분포', linewidth=2, alpha=0.7)
@@ -912,8 +933,8 @@ def plot_category_distribution(data, category=None):
         ax.grid(True, alpha=0.3)
         ax.legend(loc='upper left', bbox_to_anchor=(1, 1))
         
-        # 여백 조정
-        plt.tight_layout()
+        # 여백 조정 전 레이아웃 최적화
+        plt.tight_layout(rect=[0, 0, 0.85, 1])  # 범례를 위한 여백 확보
         
         # 데이터프레임 생성
         distribution_df = pd.DataFrame({
