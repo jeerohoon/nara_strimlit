@@ -42,10 +42,8 @@ def categorize_client(client):
     # 교육기관 분류
     if any(word in client for word in ['교육청', '교육지원청']):
         return '교육청'
-    elif any(word in client for word in ['고등학교', '중학교', '초등학교', '학교']):
+    elif any(word in client for word in ['고등학교', '중학교', '초등학교', '학교', '대학교']):
         return '학교'
-    elif '대학교' in client:
-        return '대학교'
     
     # 중앙행정기관 세분화
     if '국토교통부' in client or '국토부' in client:
@@ -66,7 +64,7 @@ def categorize_client(client):
     ]):
         return '기타공사'
     
-    # 기타공단으로 분류될 기관들
+    # 기타공단으로 분류 기관들
     if any(org in client for org in [
         '국민건강보험공단', '한국환경공단', '한국산업단지공단',
         '근로복지공단', '한국가스공단', '도로교통공단', '국민연금공단'
@@ -448,7 +446,7 @@ def reclassify_small_categories(data, min_count=30):
         # 기타공사로 통합
         '한국전력공사': '기타공사',
         '한국도로공사': '기타공사',
-        '한국토지주택공사': '기타공사',  # 추가
+        '한국토지주택공사': '기타공사',
         '한국마사회': '기타공사',
         
         # 기타공단으로 통합
@@ -456,11 +454,9 @@ def reclassify_small_categories(data, min_count=30):
         
         # 기타로 통합
         '협회조합': '기타',
-        '공공기관': '기타',  # 추가
+        '공공기관': '기타',
         
-        # 기존 재분류 규칙 유지
-        '대학교': '교육청',
-        '학교': '교육청',
+        # 학교는 더 이상 교육청으로 통합하지 않음
         '경찰소방': '공공기관',
         '연구기관': '공공기관',
         '의료기관': '공공기관'
@@ -545,7 +541,7 @@ def load_and_preprocess_data():
                         st.warning(f"낙찰정보 파일 '{file}' 읽기 실패: {str(e)}")
                         continue
             
-            if award_dfs:  # 낙찰정보가 있는 경우에만 병합
+            if award_dfs:  # 낙정보가 있는 경우에만 병합
                 merged_award = pd.concat(award_dfs, axis=0, ignore_index=True)
                 
                 # 낙찰정보도 중복 제거 (최신 데이터 유지)
@@ -615,8 +611,16 @@ with col1:
         try:
             # 기존의 입찰 데이터 업로드 로직
             new_data = pd.read_excel(bid_file, header=1)
-            existing_columns = processed_data.columns
-            new_data = new_data[existing_columns.intersection(new_data.columns)]
+            
+            # 발주처 카테고리 추가
+            new_data['발주처_카테고리'] = new_data['발주처'].apply(categorize_client)
+            
+            # 카테고리 일관성 검사
+            unique_categories = new_data['발주처_카테고리'].unique()
+            st.text("=== 새로운 데이터의 발주처 카테고리 ===")
+            for category in unique_categories:
+                count = len(new_data[new_data['발주처_카테고리'] == category])
+                st.text(f"{category}: {count}건")
             
             # # 데이터 확인을 위한 정보 출력
             # st.write("업로드된 파일의 열:", new_data.columns.tolist())
@@ -665,11 +669,8 @@ with col2:
     
     if award_file is not None:
         try:
-            # 새로운 낙찰 데이터 읽기 (header=1 설정)
+            # 새로운 낙찰 데이터 읽기
             new_award_data = pd.read_excel(award_file, header=1)
-            
-            # # 데이터 확인을 위한 정보 출력
-            # st.write("업로드된 파일의 열:", new_award_data.columns.tolist())
             
             # 필수 열 확인
             required_columns = ['공고번호', '1순위사정률']
@@ -678,7 +679,7 @@ with col2:
             if missing_columns:
                 st.error(f"필수 열이 누락되었습니다: {', '.join(missing_columns)}")
             else:
-                # 숫자형 이터 변환
+                # 숫자형 데이터 변환
                 if '1순위사정률' in new_award_data.columns:
                     new_award_data['1순위사정률'] = new_award_data['1순위사정률'].apply(convert_to_numeric)
                 
@@ -708,9 +709,65 @@ with col2:
                 - 업데이트 후 빈 값: {after_empty}개
                 """)
                 
+                # 세션 상태 업데이트
+                st.session_state['processed_data'] = processed_data
+                
         except Exception as e:
             st.error(f"파일 처리 중 오류가 발생했습니다: {str(e)}")
             st.write("오류 상세:", str(e))
+
+# 통계 업데이트 버튼 추가
+if st.button("📊 통계 데이터 업데이트", type="primary"):
+    with st.spinner("통계 데이터 업데이트 중..."):
+        try:
+            # 전체 데이터의 카테고리별 건수 재계산
+            total_counts = processed_data['발주처_카테고리'].value_counts()
+            
+            # 현재 설정된 제외 구간 값 가져오기
+            exclude_lower = st.session_state.get('exclude_lower', 99.5)
+            exclude_upper = st.session_state.get('exclude_upper', 100.5)
+            
+            # 1순위사정률 통계 재계산
+            category_stats = show_category_statistics(processed_data, exclude_lower, exclude_upper)
+            
+            # 세션 상태에 업데이트된 데이터 저장
+            st.session_state['processed_data'] = processed_data
+            st.session_state['total_counts'] = total_counts
+            st.session_state['category_stats'] = category_stats
+            
+            st.success("통계 데이터가 성공적으로 업데이트되었습니다.")
+            
+            # 통계 표시 부분 업데이트
+            st.subheader("발주처 카테고리별 1순위사정률 통계")
+            if category_stats is not None:
+                st.dataframe(
+                    category_stats.style.format({
+                        '건수': '{:,.0f}',
+                        '평균 사정률': '{:.4f}%',
+                        '최저 사정률': '{:.4f}%',
+                        '최고 사정률': '{:.4f}%',
+                        '중앙값 사정률': '{:.4f}%',
+                        '표준편차': '{:.4f}',
+                        '1순위 구간': '{}',
+                        '2순위 구간': '{}',
+                        '3순위 구간': '{}',
+                        '4순위 구간': '{}',
+                        '5순위 구간': '{}',
+                        '1순위 초과확률(%)': '{}',
+                        '2순위 초과확률(%)': '{}',
+                        '3순위 초과확률(%)': '{}',
+                        '4순위 초과확률(%)': '{}',
+                        '5순위 초과확률(%)': '{}'
+                    }).set_properties(subset=pd.IndexSlice['전체', :], 
+                                    **{'background-color': 'lightgray'}),
+                    use_container_width=True
+                )
+            
+            # 페이지 새로고침
+            st.rerun()
+            
+        except Exception as e:
+            st.error(f"통계 업데이트 중 오류가 발생했습니다: {str(e)}")
 
 ########################################################
 # 엑셀 다운로드 기능
@@ -755,19 +812,36 @@ with col1:
         "제외할 구간 하한값 (%)",
         min_value=97.0,
         max_value=100.0,
-        value=99.5,
+        value=st.session_state.get('exclude_lower', 99.5),
         step=0.1,
-        format="%.1f"
+        format="%.1f",
+        key='exclude_lower'
     )
 with col2:
     exclude_upper = st.number_input(
         "제외할 구간 상한값 (%)",
         min_value=100.0,
         max_value=103.0,
-        value=100.5,
+        value=st.session_state.get('exclude_upper', 100.5),
         step=0.1,
-        format="%.1f"
+        format="%.1f",
+        key='exclude_upper'
     )
+
+# 세션 상태에서 데이터 가져오기
+if 'processed_data' in st.session_state:
+    processed_data = st.session_state['processed_data']
+
+# 통계 업데이트 확인
+if st.session_state.get('update_stats', False):
+    # 전체 데이터의 카테고리별 건수 재계산
+    total_counts = processed_data['발주처_카테고리'].value_counts()
+    
+    # 1순위사정률 통계 재계산
+    category_stats = show_category_statistics(processed_data, exclude_lower, exclude_upper)
+    
+    # 업데이트 플래그 초기화
+    st.session_state['update_stats'] = False
 
 # 전체 데이터의 카테고리별 건수
 total_counts = processed_data['발주처_카테고리'].value_counts()
@@ -959,7 +1033,7 @@ if st.session_state.get('model_trained', False):
     prediction_data = prediction_candidates.dropna(subset=['기초금액', '추정가격', '투찰률', 'A값', '순공사원가', '발주처'])
     
     if len(prediction_data) > 0:
-        st.subheader("새로운 입찰건 사정률 예측 결과")
+        st.subheader("새로운 입찰건 정률 예측 결과")
         
         # 발주처 카테고리는 원본 데이터에서 가져오기
         prediction_data['발주처_카테고리'] = prediction_data['발주처'].apply(categorize_client)
