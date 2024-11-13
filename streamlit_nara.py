@@ -14,6 +14,7 @@ import seaborn as sns
 from io import BytesIO
 import xlsxwriter
 from scipy.stats import norm
+from scipy.stats import gaussian_kde
 
 # 발주처 카테고리 분류 함수
 def categorize_client(client):
@@ -187,7 +188,7 @@ class BidPricePredictor:
 
 
 
-def show_category_statistics(data):
+def show_category_statistics(data, exclude_lower=99.5, exclude_upper=100.5):
     """발주처 카테고리별 통계를 계산하고 그래프로 표시하는 함수"""
     try:
         # 1순위사정률이 있는 데이터만 선택
@@ -212,27 +213,27 @@ def show_category_statistics(data):
         stats = stats.sort_values('건수', ascending=False)
         
         # 정규분포 분석을 위한 함수
-        def find_top_probabilities(group_data, mean, std):
+        def find_top_probabilities(group_data, mean, std, exclude_lower=99.5, exclude_upper=100.5):
             try:
                 # 0.01% 단위로 구간 생성
                 intervals = np.arange(97, 103, 0.01)
                 
-                # 99.5% ~ 100.5% 구간의 인덱스 찾기
-                exclude_start = np.searchsorted(intervals, 99.5)
-                exclude_end = np.searchsorted(intervals, 100.5)
+                # 제외 구간의 인덱스 찾기
+                exclude_start = np.searchsorted(intervals, exclude_lower)
+                exclude_end = np.searchsorted(intervals, exclude_upper)
                 
-                # 각 구간의 실제 발생 확률 계산
+                # KDE를 사용한 확률 밀도 추정
+                kde = gaussian_kde(group_data)
+                kde_density = kde(intervals)
+                
+                # 실제 분포 계산
                 actual_prob = np.array([
                     len(group_data[(group_data >= i) & (group_data < i + 0.01)]) / len(group_data)
                     for i in intervals
                 ])
                 
-                # 정규분포 확률 계산
-                normal_prob = norm.pdf(intervals, mean, std)
-                normal_prob = normal_prob / sum(normal_prob)  # 정규화
-                
-                # 실제 확률이 정규분포 확률보다 높은 구간 찾기
-                prob_diff = actual_prob - normal_prob
+                # 실제 확률이 KDE 추정 확률보다 높은 구간 찾기
+                prob_diff = actual_prob - kde_density/sum(kde_density)
                 
                 # 제외 구간의 확률 차이를 -inf로 설정하여 선택되지 않도록 함
                 prob_diff[exclude_start:exclude_end] = float('-inf')
@@ -246,7 +247,7 @@ def show_category_statistics(data):
                 
                 return top_intervals, prob_differences
             except Exception as e:
-                st.error(f"정규분포 분석 중 오류 발생: {str(e)}")
+                st.error(f"KDE 분석 중 오류 발생: {str(e)}")
                 return [], []
         
         # 각 카테고리별로 정규분포 분석 수행
@@ -258,7 +259,9 @@ def show_category_statistics(data):
                         mean = stats.loc[category, '평균 사정률']
                         std = stats.loc[category, '표준편차']
                         
-                        intervals, prob_diffs = find_top_probabilities(group_data, mean, std)
+                        intervals, prob_diffs = find_top_probabilities(
+                            group_data, mean, std, exclude_lower, exclude_upper
+                        )
                         
                         # 결과 저장
                         for i in range(min(5, len(intervals))):
@@ -492,7 +495,7 @@ def load_and_preprocess_data():
         existing_bid_files = [f for f in bid_files if os.path.exists(f)]
         
         if not existing_bid_files:
-            st.error("입찰정보를 찾 수 없습니다.")
+            st.error("입찰정보를 찾을 수 없습니다.")
             return pd.DataFrame()
         
         # 입찰정보 파일 읽기
@@ -744,6 +747,28 @@ st.caption(f"전체 {len(processed_data):,}개의 데이터가 포함되어 있�
 # 발주처 카테고리별 통계 표시
 st.header("2. 발주처 카테고리별 통계", divider=True)
 
+# 정규분포 분석 구간 설정
+st.subheader("정규분포 분석 구간 설정")
+col1, col2 = st.columns(2)
+with col1:
+    exclude_lower = st.number_input(
+        "제외할 구간 하한값 (%)",
+        min_value=97.0,
+        max_value=100.0,
+        value=99.5,
+        step=0.1,
+        format="%.1f"
+    )
+with col2:
+    exclude_upper = st.number_input(
+        "제외할 구간 상한값 (%)",
+        min_value=100.0,
+        max_value=103.0,
+        value=100.5,
+        step=0.1,
+        format="%.1f"
+    )
+
 # 전체 데이터의 카테고리별 건수
 total_counts = processed_data['발주처_카테고리'].value_counts()
 # st.text("\n=== 전체 발주처 카테고리별 건수 ===")
@@ -752,7 +777,140 @@ total_counts = processed_data['발주처_카테고리'].value_counts()
 
 # 1순위사정률이 있는 데이터의 통계
 st.subheader("발주처 카테고리별 1순위사정률 통계")
-category_stats = show_category_statistics(processed_data)
+category_stats = show_category_statistics(processed_data, exclude_lower, exclude_upper)
+
+########################################################
+def plot_category_distribution(data, category=None):
+    """발주처 카테고리별 확률분포와 실제 분포를 비교하는 그래프"""
+    try:
+        # 한글 폰트 설정
+        setup_korean_font()
+        
+        # 데이터 필터링
+        if category == '전체':
+            category_data = data['1순위사정률'].dropna()
+        else:
+            category_data = data[data['발주처_카테고리'] == category]['1순위사정률'].dropna()
+        
+        if len(category_data) == 0:
+            st.warning(f"{category} 카테고리의 데이터가 없습니다.")
+            return None
+        
+        # 0.01% 단위로 구간 생성
+        intervals = np.arange(97, 103, 0.01)
+        
+        # 실제 분포 계산 (확률 밀도로 변환)
+        total_samples = len(category_data)
+        actual_counts = []
+        for i in intervals:
+            count = len(category_data[(category_data >= i) & (category_data < i + 0.01)])
+            actual_counts.append(count / total_samples / 0.01)  # 확률 밀도로 변환
+        
+        # KDE를 사용한 확률 밀도 추정
+        kde = gaussian_kde(category_data)
+        kde_density = kde(intervals)
+        
+        # 그래프 생성
+        fig, ax = plt.subplots(figsize=(15, 8))
+        
+        # 실제 분포 그래프
+        ax.plot(intervals, actual_counts, color='steelblue', 
+               label='실제 확률분포', linewidth=2, alpha=0.7)
+        
+        # KDE 그래프
+        ax.plot(intervals, kde_density, color='red', 
+               label='KDE 추정 확률분포', linewidth=2, 
+               linestyle='--', alpha=0.7)
+        
+        # 평균과 표준편차 표시
+        mean = category_data.mean()
+        std = category_data.std()
+        ax.axvline(mean, color='green', linestyle='-', alpha=0.5, 
+                  label=f'평균: {mean:.4f}%')
+        ax.axvline(mean - std, color='orange', linestyle=':', alpha=0.5, 
+                  label=f'평균 ± 표준편차\n({mean-std:.4f}% ~ {mean+std:.4f}%)')
+        ax.axvline(mean + std, color='orange', linestyle=':', alpha=0.5)
+        
+        # 그래프 스타일링
+        ax.set_title(f'{category} 카테고리의 1순위사정률 확률분포', pad=20)
+        ax.set_xlabel('1순위사정률 (%)', labelpad=10)
+        ax.set_ylabel('확률 밀도', labelpad=10)
+        ax.grid(True, alpha=0.3)
+        ax.legend(loc='upper left', bbox_to_anchor=(1, 1))
+        
+        # 여백 조정
+        plt.tight_layout()
+        
+        # 데이터프레임 생성
+        distribution_df = pd.DataFrame({
+            '사정률(%)': intervals,
+            'KDE추정_확률밀도': kde_density,
+            '실제_확률밀도': actual_counts
+        })
+        
+        # 통계 정보 추가
+        stats_df = pd.DataFrame({
+            '통계량': ['평균', '표준편차', '중앙값', '최빈값', '왜도', '첨도'],
+            '값': [
+                f"{mean:.4f}%",
+                f"{std:.4f}",
+                f"{category_data.median():.4f}%",
+                f"{category_data.mode().iloc[0]:.4f}%",
+                f"{category_data.skew():.4f}",
+                f"{category_data.kurtosis():.4f}"
+            ]
+        })
+        
+        # 엑셀 다운로드 부분 수정
+        def create_excel_download(distribution_df, stats_df, category):
+            """엑셀 파일 생성 함수"""
+            output = BytesIO()
+            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                # 확률분포 시트
+                distribution_df.to_excel(writer, sheet_name='확률분포', index=False)
+                
+                # 통계정보 시트
+                stats_df.to_excel(writer, sheet_name='통계정보', index=False)
+                
+                # 자동 열 너비 조정
+                for sheet in writer.sheets.values():
+                    for idx, col in enumerate(distribution_df.columns):
+                        column_len = max(distribution_df[col].astype(str).apply(len).max(), len(col)) + 2
+                        sheet.set_column(idx, idx, column_len)
+            
+            output.seek(0)
+            return output
+        
+        # 엑셀 다운로드 버튼
+        excel_data = create_excel_download(distribution_df, stats_df, category)
+        st.download_button(
+            label=f"📥 {category} 카테고리의 확률분포 데이터 다운로드",
+            data=excel_data,
+            file_name=f'{category}_distribution_analysis.xlsx',
+            mime='application/vnd.ms-excel'
+        )
+        
+        # 통계 정보 표시
+        st.text("\n=== 분포 특성 ===")
+        st.dataframe(stats_df, use_container_width=True)
+        
+        return fig
+        
+    except Exception as e:
+        st.error(f"분포 그래프 생성 중 오류 발생: {str(e)}")
+        return None
+
+# 발주처 카테고리별 통계 표시 부분에 추가
+st.subheader("발주처 카테고리별 1순위사정률 분포")
+
+# 카테고리 선택 박스
+categories = ['전체'] + list(total_counts.index)
+selected_category = st.selectbox('발주처 카테고리 선택', categories)
+
+# 선택된 카테고리의 분포 그래프 표시
+fig = plot_category_distribution(processed_data, selected_category)
+if fig is not None:
+    st.pyplot(fig)
 
 ########################################################
 st.header("3. 사정률 예측 모델", divider=True)
@@ -781,7 +939,7 @@ if st.button("🤖 머신러닝 모델 학습 시작", type="primary"):
                 with col2:
                     st.metric(label="테스트 데이터 R² 수치", value="{:.4f}".format(test_score))
                 
-                # 학습된 모델을 세션 상태에 저장
+                # 학습 모델을 세션 상태에 저장
                 st.session_state['predictor'] = predictor
                 st.session_state['model_trained'] = True
                 
@@ -889,3 +1047,4 @@ if st.session_state.get('model_trained', False):
 
 else:
     st.info("먼저 머신러닝 모델 학습을 실행해주세요.")
+
