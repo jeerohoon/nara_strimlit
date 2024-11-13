@@ -339,13 +339,28 @@ def setup_korean_font():
         elif system_name == "Darwin":  # macOS
             plt.rcParams['font.family'] = 'AppleGothic'
         else:  # Linux
-            # 나눔고딕 폰트가 없는 경우 설치
-            import subprocess
-            try:
-                subprocess.run(['fc-list', ':lang=ko'], check=True)
-            except:
-                subprocess.run(['apt-get', 'install', '-y', 'fonts-nanum'], check=True)
-            plt.rcParams['font.family'] = 'NanumGothic'
+            # 기본 폰트 사용
+            plt.rcParams['font.family'] = 'DejaVu Sans'
+            
+            # 한글 폰트가 포함된 폰트 패밀리 설정
+            font_list = [
+                'NanumGothic',
+                'NanumBarunGothic',
+                'NotoSansCJK-Regular',
+                'UnDotum',
+                'DejaVu Sans'
+            ]
+            
+            for font in font_list:
+                try:
+                    plt.rcParams['font.family'] = font
+                    # 테스트 텍스트로 폰트 확인
+                    fig, ax = plt.subplots()
+                    ax.text(0.5, 0.5, '한글 테스트', fontsize=12)
+                    plt.close(fig)
+                    break
+                except:
+                    continue
         
         plt.rcParams['axes.unicode_minus'] = False
         
@@ -875,6 +890,19 @@ def plot_category_distribution(data, category=None):
         setup_korean_font()
         plt.clf()  # 이전 그래프 초기화
         
+        # 폰트 크기 설정
+        SMALL_SIZE = 10
+        MEDIUM_SIZE = 12
+        BIGGER_SIZE = 14
+
+        plt.rc('font', size=SMALL_SIZE)          # 기본 폰트 크기
+        plt.rc('axes', titlesize=BIGGER_SIZE)    # 축 제목 폰트 크기
+        plt.rc('axes', labelsize=MEDIUM_SIZE)    # 축 라벨 폰트 크기
+        plt.rc('xtick', labelsize=SMALL_SIZE)    # x축 눈금 폰트 크기
+        plt.rc('ytick', labelsize=SMALL_SIZE)    # y축 눈금 폰트 크기
+        plt.rc('legend', fontsize=SMALL_SIZE)    # 범례 폰트 크기
+        plt.rc('figure', titlesize=BIGGER_SIZE)  # 그림 제목 폰트 크기
+        
         # 데이터 필터링
         if category == '전체':
             category_data = data['1순위사정률'].dropna()
@@ -901,12 +929,6 @@ def plot_category_distribution(data, category=None):
         
         # 그래프 생성
         fig, ax = plt.subplots(figsize=(15, 8))
-        
-        # 폰트 크기 조정
-        plt.rcParams['font.size'] = 12
-        plt.rcParams['axes.titlesize'] = 14
-        plt.rcParams['axes.labelsize'] = 12
-        plt.rcParams['legend.fontsize'] = 10
         
         # 실제 분포 그래프
         ax.plot(intervals, actual_counts, color='steelblue', 
