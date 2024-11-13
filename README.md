@@ -12,7 +12,3 @@
 ## 설치 방법
 
 1. 저장소 클론
-2. 필요한 패키지 설치
-```
-pip install -r requirements.txt
-```
