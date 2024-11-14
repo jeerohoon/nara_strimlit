@@ -243,7 +243,7 @@ def show_category_statistics(data, exclude_lower=99.5, exclude_upper=100.5):
         # 건수로 정렬
         stats = stats.sort_values('건수', ascending=False)
         
-        # 정규분포 분석을 위한 함수
+        # KDE 추정 확률분포 분석을 위한 함수
         def find_top_probabilities(group_data, mean, std, exclude_lower=99.5, exclude_upper=100.5):
             try:
                 # 0.01% 단위로 구간 생성
@@ -281,7 +281,7 @@ def show_category_statistics(data, exclude_lower=99.5, exclude_upper=100.5):
                 st.error(f"KDE 분석 중 오류 발생: {str(e)}")
                 return [], []
         
-        # 각 카테고리별로 정규분포 분석 수행
+        # 각 카테고리별로 KDE 추정 확률분포 분석 수행
         for category in stats.index:
             if category != '전체':  # 전체 카테고리 제외
                 try:
@@ -311,7 +311,7 @@ def show_category_statistics(data, exclude_lower=99.5, exclude_upper=100.5):
             '표준편차': valid_data['1순위사정률'].std()
         }, index=['전체'])
         
-        # 전체 데이터에 대한 정규분포 분석 수행
+        # 전체 데이터에 대한 KDE 추정 확률분포 분석 수행
         try:
             mean = total_stats.loc['전체', '평균 사정률']
             std = total_stats.loc['전체', '표준편차']
@@ -866,8 +866,8 @@ st.caption(f"전체 {len(processed_data):,}개의 데이터가 포함되어 있�
 # 발주처 카테고리별 통계 표시
 st.header("2. 발주처 카테고리별 통계", divider=True)
 
-# 정규분포 분석 구간 설정
-st.subheader("정규분포 분석 구간 설정")
+# KDE 추정 확률분포 분석 구간 설정
+st.subheader("KDE 추정 확률분포 분석 구간 설정")
 col1, col2 = st.columns(2)
 with col1:
     exclude_lower = st.number_input(
